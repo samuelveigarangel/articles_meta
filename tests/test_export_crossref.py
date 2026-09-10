@@ -3,7 +3,7 @@ import unittest
 import json
 import os
 import io
-from unittest.mock import patch, PropertyMock
+from unittest.mock import Mock, patch, PropertyMock
 
 from lxml import etree as ET
 
