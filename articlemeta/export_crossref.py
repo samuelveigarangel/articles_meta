@@ -390,20 +390,45 @@ def _get_langs_ordered_by_priority(raw):
     return main_langs
 
 
+def _nonempty_article_titles(raw):
+    titles = {raw.original_language(): raw.original_title()}
+    titles.update(raw.translated_titles() or {})
+    return {
+        lang: title.strip() if isinstance(title, str) else title
+        for lang, title in titles.items()
+        if title and str(title).strip()
+    }
+
+
+def _title_for_journal_article(titles, ja_lang, langs_ordered_by_priority):
+    if ja_lang and titles.get(ja_lang):
+        return titles[ja_lang]
+    for lang in langs_ordered_by_priority:
+        if titles.get(lang):
+            return titles[lang]
+    for title in titles.values():
+        if title:
+            return title
+    return '[NO TITLE AVAILABLE]'
+
+
 class XMLArticleTitlePipe(plumber.Pipe):
     """
     Create `<title>` and `<original_language_title/>`
     `<title>` contains the article title related to the corresponding DOI
     `<original_language_title>` is a title different from `<title>`, select the
     first title from a priority list: en, pt, es, other article title languages
+
+    If there is no title in the ``journal_article`` language, fall back to the
+    first available title instead of ``[NO TITLE AVAILABLE]``. Alternate titles
+    are emitted only when another language has a distinct, non-empty title.
     """
 
     def transform(self, data):
         raw, xml = data
         nodes = xml.findall('.//journal_article')
 
-        article_titles = {raw.original_language(): raw.original_title()}
-        article_titles.update(raw.translated_titles() or {})
+        article_titles = _nonempty_article_titles(raw)
         langs_ordered_by_priority = _get_langs_ordered_by_priority(raw)
 
         for ja in nodes:
@@ -411,13 +436,17 @@ class XMLArticleTitlePipe(plumber.Pipe):
 
             node = ja.find('./titles')
 
-            # create `<title>` which content is a title in a language equal to `ja_lang`
             el = ET.Element('title')
-            el.text = article_titles.get(ja_lang) or '[NO TITLE AVAILABLE]'
+            main_title = _title_for_journal_article(
+                article_titles, ja_lang, langs_ordered_by_priority)
+            el.text = main_title
             node.append(el)
 
             for lang in langs_ordered_by_priority:
-                if ja_lang == lang:
+                if lang == ja_lang:
+                    continue
+                alt_text = article_titles.get(lang)
+                if not alt_text or alt_text == main_title:
                     continue
 
                 # create `<original_language_title>` which content is
@@ -425,9 +454,8 @@ class XMLArticleTitlePipe(plumber.Pipe):
                 # (http://support.crossref.org/hc/requests/407513)
                 alt_title = ET.Element('original_language_title')
                 alt_title.set('language', lang)
-                alt_title.text = article_titles.get(lang) or '[NO TITLE AVAILABLE]'
+                alt_title.text = alt_text
                 node.append(alt_title)
-                # select only the first title
                 break
 
         return data

@@ -603,6 +603,46 @@ class ExportCrossRef_one_DOI_only_Tests(unittest.TestCase):
         self.assertEqual(expected_titles, titles)
         self.assertEqual(expected_alt_titles, alt_titles)
 
+    def test_article_title_falls_back_when_missing_in_journal_language(self):
+        title = (
+            'Methodological parameters for the identification and '
+            'taxonomic classification of isolated theropodomorph teeth'
+        )
+        raw = Mock()
+        raw.original_language.return_value = 'en'
+        raw.original_title.return_value = None
+        raw.translated_titles.return_value = {'pt': title}
+
+        xml = ET.fromstring(
+            '<doi_batch><body><journal>'
+            '<journal_article language="en" publication_type="full_text">'
+            '<titles/>'
+            '</journal_article>'
+            '</journal></body></doi_batch>'
+        )
+        _, xml = export_crossref.XMLArticleTitlePipe().transform([raw, xml])
+
+        self.assertEqual(title, xml.findtext('.//title'))
+        self.assertIsNone(xml.find('.//original_language_title'))
+
+    def test_article_title_placeholder_when_no_titles_exist(self):
+        raw = Mock()
+        raw.original_language.return_value = 'en'
+        raw.original_title.return_value = None
+        raw.translated_titles.return_value = {}
+
+        xml = ET.fromstring(
+            '<doi_batch><body><journal>'
+            '<journal_article language="en" publication_type="full_text">'
+            '<titles/>'
+            '</journal_article>'
+            '</journal></body></doi_batch>'
+        )
+        _, xml = export_crossref.XMLArticleTitlePipe().transform([raw, xml])
+
+        self.assertEqual('[NO TITLE AVAILABLE]', xml.findtext('.//title'))
+        self.assertIsNone(xml.find('.//original_language_title'))
+
     def test_article_contributors_element(self):
 
         raw_json = self._raw_json.copy()
