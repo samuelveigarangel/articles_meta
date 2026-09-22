@@ -21,6 +21,23 @@ Webservices para fornecer metadados de artigos SciELO da Rede SciELO (armazenado
     $ docker run --name my-articlemeta -e MONGODB_HOST=my_eshost:27017 -d my-articlemeta my-articlemeta
 ```
 
+### Como configurar o DOI da política Crossmark
+
+Para exportar atualizações editoriais no XML Crossref, configure
+`CROSSMARK_POLICY_DOI` com o DOI da política Crossmark institucional:
+
+```shell
+    $ docker run --name my-articlemeta -e CROSSMARK_POLICY_DOI=10.1590/politica-crossmark -d my-articlemeta
+```
+
+Sem essa variável, o exportador não gera o elemento `crossmark`.
+
+Para obter a data de publicação do artigo relacionado, o exportador consulta
+o Thrift Server pelo DOI. A conexão pode ser configurada com
+`ARTICLEMETA_THRIFT_HOST`, `ARTICLEMETA_THRIFT_PORT` e
+`ARTICLEMETA_THRIFT_TIMEOUT` (em milissegundos). Os padrões são
+`127.0.0.1`, `11620` e `3000`, respectivamente.
+
 Os serviços ativos nesta imagem são:
 
  * Web API: 127.0.0.1:8000
