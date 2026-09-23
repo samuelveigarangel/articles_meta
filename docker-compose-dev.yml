@@ -7,7 +7,6 @@ services:
     container_name: my-articlemeta
     environment:
       ADMIN_TOKEN:
-      CROSSMARK_POLICY_DOI: 10.1000/182
       LOGGING_LEVEL: DEBUG
       MONGODB_HOST:
       MONGODB_PORT:
