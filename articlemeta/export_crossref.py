@@ -14,6 +14,8 @@ from lxml import etree as ET
 from thriftpy2.rpc import make_client
 from xylose.scielodocument import Article, UnavailableMetadataException
 
+from articlemeta.controller import DataBroker, get_dbconn
+
 DetectorFactory.seed = 0
 
 SUPPLBEG_REGEX = re.compile(r'^0 ')
@@ -1466,7 +1468,8 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
 
         for related_article in related_articles:
             update_type = self._resolve_update_type(
-                related_article, current_document_type)
+                related_article, current_document_type
+            )
             identifier_type = str(
                 related_article.get('ext_link_type') or 'doi'
             ).lower()
@@ -1485,6 +1488,12 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
 
     @staticmethod
     def _complete_update_date(update_date):
+        """
+        Completa a data de atualização fornecida em formato AAAA, AAAA-MM ou AAAA-MM-DD.
+        Retorna uma string no formato AAAA-01-01 se apenas o ano for fornecido,
+        AAAA-MM-01 se ano e mês forem fornecidos, ou retorna o valor original se já estiver completo.
+        Se nenhum valor for fornecido, retorna None.
+        """
         if not update_date:
             return None
 
@@ -1520,6 +1529,15 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
 
     @classmethod
     def _move_custom_metadata_programs(cls, journal_article, crossmark):
+        """Move os programas de metadados não bibliográficos para o Crossmark.
+
+        O schema exige que ``fr:program`` (FundRef), ``ai:program``
+        (Access Indicators) e ``ct:program`` (Clinical Trials) fiquem dentro
+        de ``crossmark/custom_metadata``, nessa ordem. Os pipes anteriores
+        acrescentam esses programas como filhos de ``journal_article``.
+        Esta função os retira de lá e os reinsere em ``custom_metadata``,
+        preservando a ordem do schema.
+        """
         for program in list(journal_article):
             namespace = ET.QName(program).namespace
             if namespace in cls.PROGRAM_ORDER:
@@ -1555,16 +1573,48 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
 
         return crossmark
 
+    @staticmethod
+    def _journal_issns(raw):
+        journal = getattr(raw, 'journal', None)
+        if not journal:
+            return []
+
+        issns = []
+        for name in ('electronic_issn', 'print_issn', 'scielo_issn'):
+            try:
+                value = getattr(journal, name)
+            except Exception:
+                continue
+            if value and value not in issns:
+                issns.append(value)
+        return issns
+
+    @classmethod
+    def _databroker(cls):
+        if getattr(cls, '_cached_databroker', None) is None:
+            db_dsn = os.environ.get('MONGODB_HOST', '127.0.0.1:27017')
+            cls._cached_databroker = DataBroker(get_dbconn(db_dsn))
+        return cls._cached_databroker
+
+    def _get_policy_doi(self, raw):
+        broker = self._databroker()
+        for issn in self._journal_issns(raw):
+            policy = broker.get_crossmark_policy_doi(issn)
+            if policy:
+                return policy
+        return None
+
     def transform(self, data):
         raw, xml = data
-
-        policy = os.environ.get('CROSSMARK_POLICY_DOI')
-        if not policy:
-            return data
 
         journal_article = xml.find('.//journal_article')
         if journal_article is None:
             return data
+
+        policy = self._get_policy_doi(raw)
+        if not policy:
+            return data
+
 
         domain = getattr(raw, 'scielo_domain', None)
         updates = self._collect_updates(raw)

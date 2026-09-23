@@ -1062,9 +1062,10 @@ class ExportCrossRef_one_DOI_only_Tests(unittest.TestCase):
         }]
         self._raw_json['article']['v223'] = [{'_': '20260922'}]
         related_article = Mock(publication_date='2026-09-22')
-        with patch.dict(
-                os.environ,
-                {'CROSSMARK_POLICY_DOI': '10.1590/crossmark-policy'}):
+        with patch.object(
+                export_crossref.XMLCrossmarkUpdatesPipe,
+                '_get_policy_doi',
+                return_value='10.1590/crossmark-policy'):
             with patch.object(
                     export_crossref.XMLCrossmarkUpdatesPipe,
                     '_get_related_article',
@@ -3093,10 +3094,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
         self.related_article_patch.stop()
 
     def transform(self, raw=None, xml=None, policy=None):
-        environment = {}
-        if policy is not None:
-            environment['CROSSMARK_POLICY_DOI'] = policy
-        with patch.dict(os.environ, environment, clear=True):
+        with patch.object(self.pipe, '_get_policy_doi', return_value=policy):
             return self.pipe.transform([
                 raw or self.raw,
                 xml if xml is not None else self.xmlcrossref,
