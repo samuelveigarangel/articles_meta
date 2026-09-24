@@ -28,6 +28,16 @@ articlemeta_thrift = thriftpy2.load(
     module_name='articlemeta_crossref_thrift',
 )
 
+ARTICLEMETA_THRIFT_HOST = os.environ.get(
+    'ARTICLEMETA_THRIFT_HOST', '127.0.0.1'
+)
+ARTICLEMETA_THRIFT_PORT = int(
+    os.environ.get('ARTICLEMETA_THRIFT_PORT', '11620')
+)
+ARTICLEMETA_THRIFT_TIMEOUT = int(
+    os.environ.get('ARTICLEMETA_THRIFT_TIMEOUT', '3000')
+)
+
 
 class SetupDoiBatchPipe(plumber.Pipe):
 
@@ -1430,18 +1440,13 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
 
     @staticmethod
     def _get_related_article(identifier, collection):
-        host = os.environ.get('ARTICLEMETA_THRIFT_HOST', '127.0.0.1')
-        port = int(os.environ.get('ARTICLEMETA_THRIFT_PORT', '11620'))
-        timeout = int(
-            os.environ.get('ARTICLEMETA_THRIFT_TIMEOUT', '3000')
-        )
         client = None
         try:
             client = make_client(
                 articlemeta_thrift.ArticleMeta,
-                host,
-                port,
-                timeout=timeout,
+                ARTICLEMETA_THRIFT_HOST,
+                ARTICLEMETA_THRIFT_PORT,
+                timeout=ARTICLEMETA_THRIFT_TIMEOUT,
             )
             result = client.get_article(
                 identifier,
@@ -1470,9 +1475,7 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
             update_type = self._resolve_update_type(
                 related_article, current_document_type
             )
-            identifier_type = str(
-                related_article.get('ext_link_type') or 'doi'
-            ).lower()
+            identifier_type = str(related_article.get('ext_link_type')).lower()
             identifier = related_article.get('id')
             if not update_type or identifier_type != 'doi' or not identifier:
                 continue
@@ -1597,12 +1600,8 @@ class XMLCrossmarkUpdatesPipe(plumber.Pipe):
         return cls._cached_databroker
 
     def _get_policy_doi(self, raw):
-        broker = self._databroker()
-        for issn in self._journal_issns(raw):
-            policy = broker.get_crossmark_policy_doi(issn)
-            if policy:
-                return policy
-        return None
+        issns = self._journal_issns(raw)
+        return self._databroker().get_crossmark_policy_doi(issns)
 
     def transform(self, data):
         raw, xml = data
