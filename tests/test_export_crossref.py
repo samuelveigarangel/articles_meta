@@ -3093,8 +3093,9 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
     def tearDown(self):
         self.related_article_patch.stop()
 
-    def transform(self, raw=None, xml=None, policy=None):
-        with patch.object(self.pipe, '_get_policy_doi', return_value=policy):
+    def transform(self, raw=None, xml=None, policy_doi=None):
+        with patch.object(
+                self.pipe, '_get_policy_doi', return_value=policy_doi):
             return self.pipe.transform([
                 raw or self.raw,
                 xml if xml is not None else self.xmlcrossref,
@@ -3161,12 +3162,11 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             },
         })
 
-        with patch.dict(os.environ, {
-                'ARTICLEMETA_THRIFT_HOST': 'articlemeta-thriftserver',
-                'ARTICLEMETA_THRIFT_PORT': '11620',
-                'ARTICLEMETA_THRIFT_TIMEOUT': '5000',
-        }):
-            with patch.object(
+        with patch.object(
+                export_crossref, 'ARTICLEMETA_THRIFT_HOST',
+                'articlemeta-thriftserver'), patch.object(
+                export_crossref, 'ARTICLEMETA_THRIFT_PORT', 11620), patch.object(
+                export_crossref, 'ARTICLEMETA_THRIFT_TIMEOUT', 5000), patch.object(
                     export_crossref,
                     'make_client',
                     return_value=client) as make_client:
@@ -3212,7 +3212,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             'ext_link_type': 'doi',
         }]
 
-        _, xml = self.transform(policy=self.POLICY_DOI)
+        _, xml = self.transform(policy_doi=self.POLICY_DOI)
         update = xml.find('.//updates/update')
         self.assertEqual('2013-10-01', update.get('date'))
 
@@ -3245,7 +3245,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             },
         ]
 
-        _, xml = self.transform(policy=self.POLICY_DOI)
+        _, xml = self.transform(policy_doi=self.POLICY_DOI)
 
         journal_article = xml.find('.//journal_article')
         self.assertEqual(
@@ -3315,7 +3315,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             },
         ]
 
-        _, xml = self.transform(policy=self.POLICY_DOI)
+        _, xml = self.transform(policy_doi=self.POLICY_DOI)
 
         crossmark = xml.find('.//crossmark')
         self.assertEqual(
@@ -3331,11 +3331,11 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             'ext_link_type': 'doi',
         }]
 
-        _, missing_policy = self.transform(policy=None)
+        _, missing_policy = self.transform(policy_doi=None)
         self.assertIsNone(missing_policy.find('.//crossmark'))
 
         self.raw.scielo_domain = None
-        _, missing_domain = self.transform(policy=self.POLICY_DOI)
+        _, missing_domain = self.transform(policy_doi=self.POLICY_DOI)
         crossmark = missing_domain.find('.//crossmark')
         self.assertEqual(
             ['crossmark_policy', 'updates'],
@@ -3346,7 +3346,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             ['pt'], 'publisher_item')
         self.raw.scielo_domain = 'www.scielo.br'
         self.related_article.publication_date = None
-        _, missing_date = self.transform(xml=xml, policy=self.POLICY_DOI)
+        _, missing_date = self.transform(xml=xml, policy_doi=self.POLICY_DOI)
         crossmark = missing_date.find('.//crossmark')
         self.assertEqual(
             ['crossmark_policy', 'crossmark_domains'],
@@ -3366,7 +3366,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
             '{http://www.crossref.org/AccessIndicators.xsd}program')
         self.xmlcrossref.find('.//journal_article').append(access_program)
 
-        _, xml = self.transform(policy=self.POLICY_DOI)
+        _, xml = self.transform(policy_doi=self.POLICY_DOI)
         _, xml = export_crossref.XMLFundingDataPipe().transform(
             [self.raw, xml])
 
@@ -3398,7 +3398,7 @@ class ExportCrossRef_XMLCrossmarkUpdatesPipe_Tests(unittest.TestCase):
         xml = create_xmlcrossref_with_n_journal_article_element(
             ['pt', 'es'], 'publisher_item')
 
-        _, xml = self.transform(xml=xml, policy=self.POLICY_DOI)
+        _, xml = self.transform(xml=xml, policy_doi=self.POLICY_DOI)
 
         journal_articles = xml.findall('.//journal_article')
         self.assertIsNotNone(journal_articles[0].find('crossmark'))
