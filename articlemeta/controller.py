@@ -1204,21 +1204,19 @@ class CrossmarkPolicyMeta:
     def __init__(self, db):
         self.db = db
 
-    def get_doi(self, issn):
-        """Devolve o DOI de ``crossmark_policy`` associado a ``issn``.
+    def get_doi(self, issns):
+        """Devolve o DOI de ``crossmark_policy`` associado aos ISSNs.
 
         O documento da coleção ``crossmark_policies`` tem ``issns``,
-        ``doi_url`` e ``content_url``. A consulta usa qualquer ISSN da lista.
-        Retorna ``None`` quando não há política para o ISSN.
+        ``doi_url`` e ``content_url``. Uma consulta com ``$in`` cobre todos
+        os ISSNs informados. Retorna ``None`` quando não há política.
         """
-        if not issn:
-            return None
-
-        document = self.db.find_one({'issns': issn}, {'_id': 0, 'doi_url': 1})
+        document = self.db.find_one(
+            {'issns': {'$in': issns}}, {'_id': 0, 'doi_url': 1})
         if not document:
             return None
 
-        return document.get('doi_url')
+        return document['doi_url']
 
 
 class DataBroker(object):
@@ -1291,8 +1289,8 @@ class DataBroker(object):
     def get_journal(self, collection=None, issn=None):
         return self.journalmeta.get(collection=collection, issn=issn)
 
-    def get_crossmark_policy_doi(self, issn):
-        return self.crossmarkpolicymeta.get_doi(issn)
+    def get_crossmark_policy_doi(self, issns):
+        return self.crossmarkpolicymeta.get_doi(issns)
 
     @LogHistoryChange(document_type="journal", event_type="delete")
     def delete_journal(self, code, collection=None):
